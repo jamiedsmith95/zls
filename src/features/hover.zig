@@ -419,6 +419,91 @@ fn hoverDefinitionFieldAccess(
     };
 }
 
+fn hoverStringLiteral(
+    handle: *DocumentStore.Handle,
+    token_index: Ast.TokenIndex,
+    arena: std.mem.Allocator,
+    markup_kind: types.MarkupKind,
+) error{OutOfMemory}!?[]const u8 {
+    const tree = &handle.tree;
+    const tag = tree.tokenTag(token_index);
+    var max_width: usize = 0;
+
+    const string = blk: switch (tag) {
+        .string_literal => {
+            const string = tree.tokenSlice(token_index);
+            max_width = string.len;
+            break :blk string;
+        },
+        .multiline_string_literal_line => {
+            var start: u32 = token_index - 1;
+            blk1: while (true) {
+                switch (tree.tokenTag(start)) {
+                    .multiline_string_literal_line => {
+                        start -= 1;
+                    },
+                    else => {
+                        start += 1;
+                        break :blk1;
+                    },
+                }
+            }
+            const string_start = tree.tokenSlice(start);
+            var acc_string: []const u8 = string_start;
+            max_width = acc_string.len;
+            blk1: while (true) {
+                start += 1;
+                switch (tree.tokenTag(start)) {
+                    .multiline_string_literal_line => {
+                        const cur_string = tree.tokenSlice(start);
+                        const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_string });
+                        max_width = @max(cur_string.len, max_width);
+                        acc_string = current;
+                    },
+                    else => {
+                        break :blk1;
+                    },
+                }
+            }
+
+            break :blk acc_string;
+        },
+        else => return null,
+    };
+    const is_utf8 = std.unicode.utf8ValidateSlice(string);
+    const byte_length = string.len;
+    const length = std.unicode.utf8CountCodepoints(string) catch 0;
+
+    switch (markup_kind) {
+        .markdown => return try std.fmt.allocPrint(arena,
+            \\| {[dash]s:-<[max_width]} |
+            \\{[string]s:}
+            \\| {[dash]s:-<[max_width]} |
+            \\| Validity | {[validity]s:} |
+            \\| Byte Length | {[byte_length]d:} |
+            \\| Character Count | {[length]d:} 🎉|
+        , .{
+            .max_width = max_width,
+            .dash = "-",
+            .string = string,
+            .validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8",
+            .byte_length = byte_length,
+            .length = length,
+        }),
+        .plaintext, .unknown_value => return try std.fmt.allocPrint(arena,
+            \\ String: {[string]s}
+            \\ Validity: {[validity]s}
+            \\ Byte Length: {[byte_length]d}
+            \\ Character Count: {[length]d}
+        , .{
+            .string = string,
+            .validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8",
+            .byte_length = byte_length,
+            .length = length,
+        }),
+    }
+}
+
 fn hoverNumberLiteral(
     handle: *DocumentStore.Handle,
     token_index: Ast.TokenIndex,
@@ -468,6 +553,30 @@ fn hoverNumberLiteral(
             .{ .sign = if (is_negative) "-" else "", .number = number },
         ),
     }
+}
+
+fn hoverDefinitionStringLiteral(
+    arena: std.mem.Allocator,
+    handle: *DocumentStore.Handle,
+    source_index: usize,
+    markup_kind: types.MarkupKind,
+    offset_encoding: offsets.Encoding,
+) error{OutOfMemory}!?types.Hover {
+    const tracy_zone = tracy.trace(@src());
+    defer tracy_zone.end();
+
+    const tree = &handle.tree;
+    const token_index = offsets.sourceIndexToTokenIndex(tree, source_index).pickPreferred(&.{ .string_literal, .multiline_string_literal_line }, tree) orelse return null;
+    const str_loc = offsets.tokenToLoc(tree, token_index);
+    const hover_text = (try hoverStringLiteral(handle, token_index, arena, markup_kind)) orelse return null;
+
+    return .{
+        .contents = .{ .markup_content = .{
+            .kind = markup_kind,
+            .value = hover_text,
+        } },
+        .range = offsets.locToRange(handle.tree.source, str_loc, offset_encoding),
+    };
 }
 
 fn hoverDefinitionNumberLiteral(
@@ -542,6 +651,7 @@ pub fn hover(
         .label_access, .label_decl => |loc| try hoverDefinitionLabel(analyser, arena, handle, source_index, loc, markup_kind, offset_encoding),
         .enum_literal => try hoverDefinitionEnumLiteral(analyser, arena, handle, source_index, markup_kind, offset_encoding),
         .number_literal, .char_literal => try hoverDefinitionNumberLiteral(arena, handle, source_index, markup_kind, offset_encoding),
+        .string_literal => try hoverDefinitionStringLiteral(arena, handle, source_index, markup_kind, offset_encoding),
         else => null,
     };
 
