@@ -428,11 +428,14 @@ fn hoverStringLiteral(
     const tree = &handle.tree;
     const tag = tree.tokenTag(token_index);
     var max_width: usize = 0;
+    var length: usize = 0;
 
     const string = blk: switch (tag) {
-        .string_literal => {
+        .string_literal,
+        => {
             const string = tree.tokenSlice(token_index);
             max_width = string.len;
+            length = string.len - "0x".len;
             break :blk string;
         },
         .multiline_string_literal_line => {
@@ -451,6 +454,7 @@ fn hoverStringLiteral(
             const string_start = tree.tokenSlice(start);
             var acc_string: []const u8 = string_start;
             max_width = acc_string.len;
+            length = acc_string.len - "0x".len;
             blk1: while (true) {
                 start += 1;
                 switch (tree.tokenTag(start)) {
@@ -458,6 +462,7 @@ fn hoverStringLiteral(
                         const cur_string = tree.tokenSlice(start);
                         const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_string });
                         max_width = @max(cur_string.len, max_width);
+                        length += cur_string.len - 1;
                         acc_string = current;
                     },
                     else => {
@@ -468,20 +473,22 @@ fn hoverStringLiteral(
 
             break :blk acc_string;
         },
-        else => return null,
+        else => {
+            return null;
+        },
     };
-    const is_utf8 = std.unicode.utf8ValidateSlice(string);
     const byte_length = string.len;
-    const length = std.unicode.utf8CountCodepoints(string) catch 0;
+    const is_utf8 = std.unicode.utf8ValidateSlice(string);
+    const validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8";
 
     switch (markup_kind) {
         .markdown => return try std.fmt.allocPrint(arena,
             \\| {[dash]s:-<[max_width]} |
             \\{[string]s}
             \\| {[dash]s:-<[max_width]} |
-            \\| {[validity_header]s: <15} | {[validity]s: <12} |
-            \\| {[byte_length_header]s: <15} | {[byte_length]d: <12} |
-            \\| {[char_count_header]s: <15} | {[length]d: <12} |
+            \\| {[validity_header]s: <15} | {[validity]s: <[pad_len]} |
+            \\| {[byte_length_header]s: <15} | {[byte_length]d: <[pad_len]} |
+            \\| {[char_count_header]s: <15} | {[length]d: <[pad_len]} |
         , .{
             .max_width = max_width,
             .dash = "-",
@@ -489,7 +496,8 @@ fn hoverStringLiteral(
             .byte_length_header = "Byte Length",
             .char_count_header = "Character Count",
             .string = string,
-            .validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8",
+            .validity = validity,
+            .pad_len = validity.len,
             .byte_length = byte_length,
             .length = length,
         }),

@@ -204,6 +204,37 @@ test "integer literal" {
     , .{ .markup_kind = .plaintext });
 }
 
+test "string literal" {
+    try testHover("const foo = \"foo<cursor> bar\"",
+        \\| --------- |
+        \\"foo bar"
+        \\| --------- |
+        \\| Validity        | Valid UTF8 |
+        \\| Byte Length     | 9          |
+        \\| Character Count | 7          |
+    );
+    try testHover("const escape = \"<cursor>\u{E9}foo\"",
+        \\| ------- |
+        \\"éfoo"
+        \\| ------- |
+        \\| Validity        | Valid UTF8 |
+        \\| Byte Length     | 7          |
+        \\| Character Count | 5          |
+    );
+    try testHover(
+        \\const foo =
+        \\\\fo<cursor>o
+        \\\\bar
+    ,
+        \\| ----- |
+        \\\\foo
+        \\\\bar
+        \\| ----- |
+        \\| Validity        | Valid UTF8 |
+        \\| Byte Length     | 11         |
+        \\| Character Count | 7          |
+    );
+}
 test "builtin" {
     try testHover(
         \\@intFr<cursor>omBool(5);
