@@ -477,11 +477,11 @@ fn hoverStringLiteral(
     switch (markup_kind) {
         .markdown => return try std.fmt.allocPrint(arena,
             \\| {[dash]s:-<[max_width]} |
-            \\{[string]s:}
+            \\{[string]s}
             \\| {[dash]s:-<[max_width]} |
-            \\| Validity | {[validity]s:} |
-            \\| Byte Length | {[byte_length]d:} |
-            \\| Character Count | {[length]d:} 🎉|
+            \\| Validity | {[validity]s} |
+            \\| Byte Length | {[byte_length]d} |
+            \\| Character Count | {[length]d} |
         , .{
             .max_width = max_width,
             .dash = "-",
