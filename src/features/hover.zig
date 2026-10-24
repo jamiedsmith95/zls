@@ -479,12 +479,15 @@ fn hoverStringLiteral(
             \\| {[dash]s:-<[max_width]} |
             \\{[string]s}
             \\| {[dash]s:-<[max_width]} |
-            \\| Validity | {[validity]s} |
-            \\| Byte Length | {[byte_length]d} |
-            \\| Character Count | {[length]d} |
+            \\| {[validity_header]s: <15} | {[validity]s: <12} |
+            \\| {[byte_length_header]s: <15} | {[byte_length]d: <12} |
+            \\| {[char_count_header]s: <15} | {[length]d: <12} |
         , .{
             .max_width = max_width,
             .dash = "-",
+            .validity_header = "Validity",
+            .byte_length_header = "Byte Length",
+            .char_count_header = "Character Count",
             .string = string,
             .validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8",
             .byte_length = byte_length,
