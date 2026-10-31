@@ -429,12 +429,21 @@ fn hoverStringLiteral(
     const tag = tree.tokenTag(token_index);
     var max_width: usize = 0;
     var length: usize = 0;
+    var display_str: []const u8 = undefined;
 
     const string = blk: switch (tag) {
         .string_literal,
         => {
-            const string = tree.tokenSlice(token_index);
-            max_width = string.len;
+            const stringView = ast.utf8Slice(tree.*, token_index) catch {
+                const string = tree.tokenSlice(token_index);
+                display_str = string;
+                max_width = string.len;
+                length = string.len - "0x".len;
+                break :blk string;
+            };
+            const string = stringView;
+            display_str = tree.tokenSlice(token_index);
+            max_width = if (std.unicode.utf8ValidateSlice(string)) string.len else display_str.len;
             length = string.len - "0x".len;
             break :blk string;
         },
@@ -451,7 +460,12 @@ fn hoverStringLiteral(
                     },
                 }
             }
-            const string_start = tree.tokenSlice(start);
+            const string_utf8 = ast.utf8Slice(tree.*, token_index) catch blkutf8: {
+                const string = tree.tokenSlice(token_index);
+                break :blkutf8 string;
+            };
+            display_str = tree.tokenSlice(token_index);
+            const string_start = string_utf8;
             var acc_string: []const u8 = string_start;
             max_width = acc_string.len;
             length = acc_string.len - "0x".len;
@@ -459,11 +473,27 @@ fn hoverStringLiteral(
                 start += 1;
                 switch (tree.tokenTag(start)) {
                     .multiline_string_literal_line => {
-                        const cur_string = tree.tokenSlice(start);
-                        const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_string });
-                        max_width = @max(cur_string.len, max_width);
-                        length += cur_string.len - 1;
+                        var cur_str: []const u8 = undefined;
+                        const cur_str_utf8 = ast.utf8Slice(tree.*, start) catch {
+                            cur_str = tree.tokenSlice(start);
+                            const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
+                            max_width = @max(cur_str.len, max_width);
+                            length += cur_str.len - 1;
+                            acc_string = current;
+                            continue;
+                        };
+                        cur_str = cur_str_utf8;
+                        const is_valid = std.unicode.utf8ValidateSlice(cur_str);
+                        const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
+                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, tree.tokenSlice(start) });
+                        if (!is_valid) {
+                            max_width = @max(max_width, tree.tokenSlice(start).len);
+                        } else {
+                            max_width = @max(cur_str.len, max_width);
+                        }
+                        length += cur_str.len - 1;
                         acc_string = current;
+                        display_str = cur_display;
                     },
                     else => {
                         break :blk1;
@@ -495,7 +525,7 @@ fn hoverStringLiteral(
             .validity_header = "Validity",
             .byte_length_header = "Byte Length",
             .char_count_header = "Character Count",
-            .string = string,
+            .string = if (is_utf8) string else display_str,
             .validity = validity,
             .pad_len = validity.len,
             .byte_length = byte_length,
@@ -507,8 +537,8 @@ fn hoverStringLiteral(
             \\ Byte Length: {[byte_length]d}
             \\ Character Count: {[length]d}
         , .{
-            .string = string,
-            .validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8",
+            .string = if (is_utf8) string else display_str,
+            .validity = validity,
             .byte_length = byte_length,
             .length = length,
         }),

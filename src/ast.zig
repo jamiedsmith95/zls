@@ -13,6 +13,32 @@ const Ast = std.zig.Ast;
 const Node = Ast.Node;
 const full = Ast.full;
 
+pub fn utf8Slice(tree: Ast, token_index: Ast.TokenIndex) error{ OutOfMemory, Overflow, InvalidCharacter }![]const u8 {
+    var tokenizer: std.zig.Tokenizer = .{
+        .buffer = tree.source,
+        .index = tree.tokenStart(token_index),
+    };
+    const token = tokenizer.next();
+    const source_slice = tree.source[token.loc.start..token.loc.end];
+
+    var list = try std.ArrayList(u8).initCapacity(std.heap.page_allocator, source_slice.len);
+    defer list.deinit(std.heap.page_allocator);
+
+    var i: usize = 0;
+    while (i < source_slice.len) {
+        // Look for \x followed by 2 hex digits
+        if (i + 3 < source_slice.len and source_slice[i] == '\\' and source_slice[i + 1] == 'x') {
+            const hex_str = source_slice[i + 2 .. i + 4];
+            const byte = try std.fmt.parseInt(u8, hex_str, 16);
+            try list.append(std.heap.page_allocator, byte);
+            i += 4; // Skip past \xNN
+        } else {
+            try list.append(std.heap.page_allocator, source_slice[i]);
+            i += 1;
+        }
+    }
+    return list.toOwnedSlice(std.heap.page_allocator);
+}
 fn fullPtrTypeComponents(tree: *const Ast, info: full.PtrType.Components) full.PtrType {
     const size: std.lang.Type.Pointer.Size = switch (tree.tokenTag(info.main_token)) {
         .asterisk => .one,
