@@ -232,6 +232,16 @@ test "unknown value of unknown type" {
 }
 
 test "string literal" {
+    try testHover(
+        \\const invalid = "\xC3\x28<cursor>"
+    ,
+        \\| ---------- |
+        \\"\xC3\x28"
+        \\| ---------- |
+        \\| Validity        | Invalid UTF8 |
+        \\| Byte Length     | 4            |
+        \\| Character Count | 2            |
+    );
     try testHover("const foo = \"foo<cursor> bar\"",
         \\| --------- |
         \\"foo bar"
