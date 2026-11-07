@@ -435,7 +435,7 @@ fn hoverStringLiteral(
     const string = blk: switch (tag) {
         .string_literal,
         => {
-            const stringView = ast.utf8Slice(tree.*, token_index) catch {
+            const stringView = ast.utf8Slice(tree.*, arena, token_index) catch {
                 const string = tree.tokenSlice(token_index);
                 display_str = string;
                 max_width = string.len;
@@ -461,7 +461,7 @@ fn hoverStringLiteral(
                     },
                 }
             }
-            const string_utf8 = ast.utf8Slice(tree.*, start) catch blkutf8: {
+            const string_utf8 = ast.utf8Slice(tree.*, arena, start) catch blkutf8: {
                 const string = tree.tokenSlice(start);
                 break :blkutf8 string;
             };
@@ -475,7 +475,7 @@ fn hoverStringLiteral(
                 switch (tree.tokenTag(start)) {
                     .multiline_string_literal_line => {
                         var cur_str: []const u8 = undefined;
-                        const cur_str_utf8 = ast.utf8Slice(tree.*, start) catch {
+                        const cur_str_utf8 = ast.utf8Slice(tree.*, arena, start) catch {
                             cur_str = tree.tokenSlice(start);
                             const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
                             max_width = @max(cur_str.len, max_width);
