@@ -435,14 +435,14 @@ fn hoverStringLiteral(
     const string = blk: switch (tag) {
         .string_literal,
         => {
-            const stringView = ast.utf8Slice(tree.*, arena, token_index) catch {
+            const string = ast.utf8Slice(tree.*, arena, token_index) catch {
+                std.debug.print("CAUGHT", .{});
                 const string = tree.tokenSlice(token_index);
                 display_str = string;
                 max_width = string.len;
                 length = string.len - "0x".len;
                 break :blk string;
             };
-            const string = stringView;
             display_str = tree.tokenSlice(token_index);
             max_width = if (std.unicode.utf8ValidateSlice(string)) string.len else display_str.len;
             length = string.len - "0x".len;
@@ -462,10 +462,11 @@ fn hoverStringLiteral(
                 }
             }
             const string_utf8 = ast.utf8Slice(tree.*, arena, start) catch blkutf8: {
+                std.debug.print("CAUGHT", .{});
                 const string = tree.tokenSlice(start);
                 break :blkutf8 string;
             };
-            display_str = tree.tokenSlice(token_index);
+            display_str = if (std.unicode.utf8ValidateSlice(string_utf8)) string_utf8 else tree.tokenSlice(start);
             const string_start = string_utf8;
             var acc_string: []const u8 = string_start;
             max_width = acc_string.len;
@@ -474,24 +475,21 @@ fn hoverStringLiteral(
                 start += 1;
                 switch (tree.tokenTag(start)) {
                     .multiline_string_literal_line => {
-                        var cur_str: []const u8 = undefined;
-                        const cur_str_utf8 = ast.utf8Slice(tree.*, arena, start) catch {
-                            cur_str = tree.tokenSlice(start);
-                            const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
-                            max_width = @max(cur_str.len, max_width);
-                            length += cur_str.len - 1;
+                        const cur_str = ast.utf8Slice(tree.*, arena, start) catch {
+                            std.debug.print("CAUGHT", .{});
+                            const inv_str = tree.tokenSlice(start);
+                            const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, inv_str });
+                            const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, inv_str });
+                            max_width = @max(inv_str.len, max_width);
+                            length += inv_str.len - 1;
                             acc_string = current;
+                            display_str = cur_display;
                             continue;
                         };
-                        cur_str = cur_str_utf8;
-                        const is_valid = std.unicode.utf8ValidateSlice(cur_str);
                         const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
-                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, tree.tokenSlice(start) });
-                        if (!is_valid) {
-                            max_width = @max(max_width, tree.tokenSlice(start).len);
-                        } else {
-                            max_width = @max(cur_str.len, max_width);
-                        }
+                        const is_valid = std.unicode.utf8ValidateSlice(cur_str);
+                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (is_valid) cur_str else tree.tokenSlice(start) });
+                        max_width = @max(cur_str.len, max_width);
                         length += cur_str.len - 1;
                         acc_string = current;
                         display_str = cur_display;
@@ -511,6 +509,7 @@ fn hoverStringLiteral(
     const byte_length = string.len;
     const is_utf8 = std.unicode.utf8ValidateSlice(string);
     const validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8";
+    std.debug.print("STRING \n{s}\nDISPLAY \n{s}\n", .{ string, display_str });
 
     switch (markup_kind) {
         .markdown => return try std.fmt.allocPrint(arena,

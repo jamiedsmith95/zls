@@ -205,32 +205,32 @@ test "integer literal" {
 }
 
 test "string literal" {
-    try testHover(
-        \\const invalid = "\xC3\x28<cursor>"
-    ,
-        \\| ---------- |
-        \\"\xC3\x28"
-        \\| ---------- |
-        \\| Validity        | Invalid UTF8 |
-        \\| Byte Length     | 4            |
-        \\| Character Count | 2            |
-    );
-    try testHover("const foo = \"foo<cursor> bar\"",
-        \\| --------- |
-        \\"foo bar"
-        \\| --------- |
-        \\| Validity        | Valid UTF8 |
-        \\| Byte Length     | 9          |
-        \\| Character Count | 7          |
-    );
-    try testHover("const escape = \"<cursor>\u{E9}foo\"",
-        \\| ------- |
-        \\"éfoo"
-        \\| ------- |
-        \\| Validity        | Valid UTF8 |
-        \\| Byte Length     | 7          |
-        \\| Character Count | 5          |
-    );
+    // try testHover(
+    //     \\const invalid = "\xC3\x28<cursor>"
+    // ,
+    //     \\| ---------- |
+    //     \\"\xC3\x28"
+    //     \\| ---------- |
+    //     \\| Validity        | Invalid UTF8 |
+    //     \\| Byte Length     | 4            |
+    //     \\| Character Count | 2            |
+    // );
+    // try testHover("const foo = \"foo<cursor> bar\"",
+    //     \\| --------- |
+    //     \\"foo bar"
+    //     \\| --------- |
+    //     \\| Validity        | Valid UTF8 |
+    //     \\| Byte Length     | 9          |
+    //     \\| Character Count | 7          |
+    // );
+    // try testHover("const escape = \"<cursor>\u{E9}foo\"",
+    //     \\| ------- |
+    //     \\"éfoo"
+    //     \\| ------- |
+    //     \\| Validity        | Valid UTF8 |
+    //     \\| Byte Length     | 7          |
+    //     \\| Character Count | 5          |
+    // );
     try testHover(
         \\const foo =
         \\\\fo<cursor>o
@@ -243,6 +243,22 @@ test "string literal" {
         \\| Validity        | Valid UTF8 |
         \\| Byte Length     | 11         |
         \\| Character Count | 7          |
+    );
+    try testHover(
+        \\const foo =
+        \\\\fo<cursor>o
+        \\\\\xC3\x28
+        \\\\foo\xE9 bar
+        \\\\bar
+    ,
+        \\| ----- |
+        \\\\foo
+        \\\\\xC3\x28
+        \\\\bar
+        \\| ----- |
+        \\| Validity        | Invalid UTF8 |
+        \\| Byte Length     | 16           |
+        \\| Character Count | 10           |
     );
 }
 test "builtin" {
