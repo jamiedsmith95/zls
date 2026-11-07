@@ -429,6 +429,7 @@ fn hoverStringLiteral(
     const tag = tree.tokenTag(token_index);
     var max_width: usize = 0;
     var length: usize = 0;
+    // display this if not valid utf8
     var display_str: []const u8 = undefined;
 
     const string = blk: switch (tag) {
@@ -460,8 +461,8 @@ fn hoverStringLiteral(
                     },
                 }
             }
-            const string_utf8 = ast.utf8Slice(tree.*, token_index) catch blkutf8: {
-                const string = tree.tokenSlice(token_index);
+            const string_utf8 = ast.utf8Slice(tree.*, start) catch blkutf8: {
+                const string = tree.tokenSlice(start);
                 break :blkutf8 string;
             };
             display_str = tree.tokenSlice(token_index);
