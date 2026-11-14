@@ -462,10 +462,7 @@ fn hoverStringLiteral(
                 break :blkutf8 string;
             };
             display_str = if (std.unicode.utf8ValidateSlice(string_utf8)) string_utf8 else tree.tokenSlice(start);
-            const trimmed_display = std.mem.cut(u8, display_str, "\\\\");
-            display_str = if (trimmed_display != null) trimmed_display.?.@"1" else display_str;
-            const trimmed_utf8 = std.mem.cut(u8, string_utf8, "\\\\");
-            var acc_string: []const u8 = if (trimmed_utf8 != null) trimmed_utf8.?.@"1" else string_utf8;
+            var acc_string: []const u8 = string_utf8;
             max_width = acc_string.len;
             blk1: while (true) {
                 start += 1;
@@ -473,20 +470,17 @@ fn hoverStringLiteral(
                     .multiline_string_literal_line => {
                         const cur_str = ast.utf8Slice(tree.*, arena, start) catch {
                             const in_str = tree.tokenSlice(start);
-                            const trimmed = std.mem.cut(u8, in_str, "\\\\");
-                            const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, if (trimmed != null) trimmed.?.@"1" else in_str });
-                            const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (trimmed != null) trimmed.?.@"1" else in_str });
+                            const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, in_str });
+                            const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, in_str });
                             max_width = @max(in_str.len, max_width);
                             acc_string = current;
                             display_str = cur_display;
                             continue;
                         };
-                        const trimmed = std.mem.cut(u8, cur_str, "\\\\");
-                        const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, if (trimmed != null) trimmed.?.@"1" else cur_str });
+                        const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
                         const is_valid = std.unicode.utf8ValidateSlice(cur_str);
                         const token_slice = tree.tokenSlice(start);
-                        const token_trimmed = std.mem.cut(u8, token_slice, "\\\\");
-                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (is_valid) (if (trimmed != null) trimmed.?.@"1" else cur_str) else (if (token_trimmed != null) token_trimmed.?.@"1" else token_slice) });
+                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (is_valid) cur_str else token_slice });
                         max_width = @max(cur_str.len, max_width);
                         acc_string = current;
                         display_str = cur_display;
@@ -496,8 +490,13 @@ fn hoverStringLiteral(
                     },
                 }
             }
+            // trim extra \\ to fix tests, not sure if ever relevant outside of the tests
+            const trimmed = std.mem.trimStart(u8, acc_string, "\\\\");
+            const size = std.mem.replacementSize(u8, trimmed, "\n\\\\", "\n");
+            const replaced = try arena.alloc(u8, size);
+            _ = std.mem.replace(u8, trimmed, "\n\\\\", "\n", replaced);
 
-            break :blk acc_string;
+            break :blk replaced;
         },
         else => {
             return null;
