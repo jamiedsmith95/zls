@@ -272,6 +272,7 @@ test "string literal" {
         \\| Byte Length          | 7          |
         \\| UTF8 Codepoint Count | 7          |
     );
+
     // test doesn't strip extra escapes at the start
     try testHover(
         \\const foo =
