@@ -25,7 +25,6 @@ pub fn utf8Slice(tree: Ast, alloc: std.mem.Allocator, token_index: Ast.TokenInde
     defer utf8_list.deinit(alloc);
 
     var i: usize = 0;
-    std.debug.print("SOURCE {s}\n", .{source_slice});
     while (i < source_slice.len) {
         // check for hex code \xNN
         if (i + 3 < source_slice.len and source_slice[i] == '\\' and source_slice[i + 1] == 'x') {

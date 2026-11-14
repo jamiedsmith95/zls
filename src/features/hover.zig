@@ -428,7 +428,6 @@ fn hoverStringLiteral(
     const tree = &handle.tree;
     const tag = tree.tokenTag(token_index);
     var max_width: usize = 0;
-    var length: usize = 0;
     // display this if not valid utf8
     var display_str: []const u8 = undefined;
 
@@ -436,16 +435,13 @@ fn hoverStringLiteral(
         .string_literal,
         => {
             const string = ast.utf8Slice(tree.*, arena, token_index) catch {
-                std.debug.print("CAUGHT", .{});
                 const string = tree.tokenSlice(token_index);
                 display_str = string;
                 max_width = string.len;
-                length = string.len - "0x".len;
                 break :blk string;
             };
             display_str = tree.tokenSlice(token_index);
             max_width = if (std.unicode.utf8ValidateSlice(string)) string.len else display_str.len;
-            length = string.len - "0x".len;
             break :blk string;
         },
         .multiline_string_literal_line => {
@@ -462,35 +458,36 @@ fn hoverStringLiteral(
                 }
             }
             const string_utf8 = ast.utf8Slice(tree.*, arena, start) catch blkutf8: {
-                std.debug.print("CAUGHT", .{});
                 const string = tree.tokenSlice(start);
                 break :blkutf8 string;
             };
             display_str = if (std.unicode.utf8ValidateSlice(string_utf8)) string_utf8 else tree.tokenSlice(start);
-            const string_start = string_utf8;
-            var acc_string: []const u8 = string_start;
+            const trimmed_display = std.mem.cut(u8, display_str, "\\\\");
+            display_str = if (trimmed_display != null) trimmed_display.?.@"1" else display_str;
+            const trimmed_utf8 = std.mem.cut(u8, string_utf8, "\\\\");
+            var acc_string: []const u8 = if (trimmed_utf8 != null) trimmed_utf8.?.@"1" else string_utf8;
             max_width = acc_string.len;
-            length = acc_string.len - "0x".len;
             blk1: while (true) {
                 start += 1;
                 switch (tree.tokenTag(start)) {
                     .multiline_string_literal_line => {
                         const cur_str = ast.utf8Slice(tree.*, arena, start) catch {
-                            std.debug.print("CAUGHT", .{});
-                            const inv_str = tree.tokenSlice(start);
-                            const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, inv_str });
-                            const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, inv_str });
-                            max_width = @max(inv_str.len, max_width);
-                            length += inv_str.len - 1;
+                            const in_str = tree.tokenSlice(start);
+                            const trimmed = std.mem.cut(u8, in_str, "\\\\");
+                            const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, if (trimmed != null) trimmed.?.@"1" else in_str });
+                            const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (trimmed != null) trimmed.?.@"1" else in_str });
+                            max_width = @max(in_str.len, max_width);
                             acc_string = current;
                             display_str = cur_display;
                             continue;
                         };
-                        const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
+                        const trimmed = std.mem.cut(u8, cur_str, "\\\\");
+                        const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, if (trimmed != null) trimmed.?.@"1" else cur_str });
                         const is_valid = std.unicode.utf8ValidateSlice(cur_str);
-                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (is_valid) cur_str else tree.tokenSlice(start) });
+                        const token_slice = tree.tokenSlice(start);
+                        const token_trimmed = std.mem.cut(u8, token_slice, "\\\\");
+                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (is_valid) (if (trimmed != null) trimmed.?.@"1" else cur_str) else (if (token_trimmed != null) token_trimmed.?.@"1" else token_slice) });
                         max_width = @max(cur_str.len, max_width);
-                        length += cur_str.len - 1;
                         acc_string = current;
                         display_str = cur_display;
                     },
@@ -509,22 +506,22 @@ fn hoverStringLiteral(
     const byte_length = string.len;
     const is_utf8 = std.unicode.utf8ValidateSlice(string);
     const validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8";
-    std.debug.print("STRING \n{s}\nDISPLAY \n{s}\n", .{ string, display_str });
+    const length = std.unicode.utf8CountCodepoints(string) catch 0;
 
     switch (markup_kind) {
         .markdown => return try std.fmt.allocPrint(arena,
             \\| {[dash]s:-<[max_width]} |
             \\{[string]s}
             \\| {[dash]s:-<[max_width]} |
-            \\| {[validity_header]s: <15} | {[validity]s: <[pad_len]} |
-            \\| {[byte_length_header]s: <15} | {[byte_length]d: <[pad_len]} |
-            \\| {[char_count_header]s: <15} | {[length]d: <[pad_len]} |
+            \\| {[validity_header]s: <20} | {[validity]s: <[pad_len]} |
+            \\| {[byte_length_header]s: <20} | {[byte_length]d: <[pad_len]} |
+            \\| {[utf8_codepoint_header]s: <20} | {[length]d: <[pad_len]} |
         , .{
             .max_width = max_width,
             .dash = "-",
             .validity_header = "Validity",
             .byte_length_header = "Byte Length",
-            .char_count_header = "Character Count",
+            .utf8_codepoint_header = "UTF8 Codepoint Count",
             .string = if (is_utf8) string else display_str,
             .validity = validity,
             .pad_len = validity.len,
@@ -535,7 +532,7 @@ fn hoverStringLiteral(
             \\ String: {[string]s}
             \\ Validity: {[validity]s}
             \\ Byte Length: {[byte_length]d}
-            \\ Character Count: {[length]d}
+            \\ UTF8 Codepoint Count: {[length]d}
         , .{
             .string = if (is_utf8) string else display_str,
             .validity = validity,

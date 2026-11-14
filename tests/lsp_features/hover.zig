@@ -205,60 +205,61 @@ test "integer literal" {
 }
 
 test "string literal" {
-    // try testHover(
-    //     \\const invalid = "\xC3\x28<cursor>"
-    // ,
-    //     \\| ---------- |
-    //     \\"\xC3\x28"
-    //     \\| ---------- |
-    //     \\| Validity        | Invalid UTF8 |
-    //     \\| Byte Length     | 4            |
-    //     \\| Character Count | 2            |
-    // );
-    // try testHover("const foo = \"foo<cursor> bar\"",
-    //     \\| --------- |
-    //     \\"foo bar"
-    //     \\| --------- |
-    //     \\| Validity        | Valid UTF8 |
-    //     \\| Byte Length     | 9          |
-    //     \\| Character Count | 7          |
-    // );
-    // try testHover("const escape = \"<cursor>\u{E9}foo\"",
-    //     \\| ------- |
-    //     \\"éfoo"
-    //     \\| ------- |
-    //     \\| Validity        | Valid UTF8 |
-    //     \\| Byte Length     | 7          |
-    //     \\| Character Count | 5          |
-    // );
     try testHover(
-        \\const foo =
-        \\\\fo<cursor>o
-        \\\\bar
+        \\const invalid = "\xC3\x28<cursor>"
     ,
-        \\| ----- |
-        \\\\foo
-        \\\\bar
-        \\| ----- |
-        \\| Validity        | Valid UTF8 |
-        \\| Byte Length     | 11         |
-        \\| Character Count | 7          |
+        \\| ---------- |
+        \\"\xC3\x28"
+        \\| ---------- |
+        \\| Validity             | Invalid UTF8 |
+        \\| Byte Length          | 4            |
+        \\| UTF8 Codepoint Count | 0            |
     );
+    try testHover("const foo = \"foo<cursor> bar\"",
+        \\| --------- |
+        \\"foo bar"
+        \\| --------- |
+        \\| Validity             | Valid UTF8 |
+        \\| Byte Length          | 9          |
+        \\| UTF8 Codepoint Count | 9          |
+    );
+    try testHover("const escape = \"<cursor>\u{E9}foo\"",
+        \\| ------- |
+        \\"éfoo"
+        \\| ------- |
+        \\| Validity             | Valid UTF8 |
+        \\| Byte Length          | 7          |
+        \\| UTF8 Codepoint Count | 6          |
+    );
+
     try testHover(
         \\const foo =
         \\\\fo<cursor>o
-        \\\\\xC3\x28
-        \\\\foo\xE9 bar
         \\\\bar
     ,
         \\| ----- |
-        \\\\foo
-        \\\\\xC3\x28
-        \\\\bar
+        \\foo
+        \\bar
         \\| ----- |
-        \\| Validity        | Invalid UTF8 |
-        \\| Byte Length     | 16           |
-        \\| Character Count | 10           |
+        \\| Validity             | Valid UTF8 |
+        \\| Byte Length          | 7          |
+        \\| UTF8 Codepoint Count | 7          |
+    );
+    // test doesn't strip extra escapes at the start
+    try testHover(
+        \\const foo =
+        \\\\fo<cursor>o
+        \\\\\n
+        \\\\bar
+    ,
+        \\| ----- |
+        \\foo
+        \\\n
+        \\bar
+        \\| ----- |
+        \\| Validity             | Valid UTF8 |
+        \\| Byte Length          | 10         |
+        \\| UTF8 Codepoint Count | 10         |
     );
 }
 test "builtin" {
