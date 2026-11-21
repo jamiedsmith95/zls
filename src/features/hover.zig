@@ -512,12 +512,12 @@ fn hoverStringLiteral(
                 }
             }
             // trim extra \\ to fix tests, not sure if ever relevant outside of the tests
-            const trimmed = std.mem.trimStart(u8, acc_string, "\\\\");
-            const size = std.mem.replacementSize(u8, trimmed, "\n\\\\", "\n");
-            const replaced = try arena.alloc(u8, size);
-            _ = std.mem.replace(u8, trimmed, "\n\\\\", "\n", replaced);
+            // const trimmed = std.mem.trimStart(u8, acc_string, "\\\\");
+            // const size = std.mem.replacementSize(u8, trimmed, "\n\\\\", "\n");
+            // const replaced = try arena.alloc(u8, size);
+            // _ = std.mem.replace(u8, trimmed, "\n\\\\", "\n", replaced);
 
-            break :blk replaced;
+            break :blk acc_string;
         },
         else => {
             return null;

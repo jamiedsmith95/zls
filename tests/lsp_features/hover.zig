@@ -265,29 +265,25 @@ test "string literal" {
         \\\\bar
     ,
         \\| ----- |
-        \\foo
-        \\bar
+        \\\\foo
+        \\\\bar
         \\| ----- |
         \\| Validity             | Valid UTF8 |
-        \\| Byte Length          | 7          |
-        \\| UTF8 Codepoint Count | 7          |
+        \\| Byte Length          | 11         |
+        \\| UTF8 Codepoint Count | 11         |
     );
-
-    // test doesn't strip extra escapes at the start
     try testHover(
         \\const foo =
         \\\\fo<cursor>o
-        \\\\\n
-        \\\\bar
+        \\\\euro \xE2\x82\xAC
     ,
-        \\| ----- |
-        \\foo
-        \\\n
-        \\bar
-        \\| ----- |
+        \\| ---------- |
+        \\\\foo
+        \\\\euro €
+        \\| ---------- |
         \\| Validity             | Valid UTF8 |
-        \\| Byte Length          | 10         |
-        \\| UTF8 Codepoint Count | 10         |
+        \\| Byte Length          | 16         |
+        \\| UTF8 Codepoint Count | 14         |
     );
 }
 test "builtin" {
