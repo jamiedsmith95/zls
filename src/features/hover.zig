@@ -499,9 +499,8 @@ fn hoverStringLiteral(
                             continue;
                         };
                         const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
-                        const is_valid = std.unicode.utf8ValidateSlice(cur_str);
                         const token_slice = tree.tokenSlice(start);
-                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, if (is_valid) cur_str else token_slice });
+                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, token_slice });
                         max_width = @max(cur_str.len, max_width);
                         acc_string = current;
                         display_str = cur_display;
@@ -529,36 +528,67 @@ fn hoverStringLiteral(
     const length = std.unicode.utf8CountCodepoints(string) catch 0;
 
     switch (markup_kind) {
-        .markdown => return try std.fmt.allocPrint(arena,
-            \\| {[dash]s:-<[max_width]} |
-            \\{[string]s}
-            \\| {[dash]s:-<[max_width]} |
-            \\| {[validity_header]s: <20} | {[validity]s: <[pad_len]} |
-            \\| {[byte_length_header]s: <20} | {[byte_length]d: <[pad_len]} |
-            \\| {[utf8_codepoint_header]s: <20} | {[length]d: <[pad_len]} |
-        , .{
-            .max_width = max_width,
-            .dash = "-",
-            .validity_header = "Validity",
-            .byte_length_header = "Byte Length",
-            .utf8_codepoint_header = "UTF8 Codepoint Count",
-            .string = if (is_utf8) string else display_str,
-            .validity = validity,
-            .pad_len = validity.len,
-            .byte_length = byte_length,
-            .length = length,
-        }),
-        .plaintext, .unknown_value => return try std.fmt.allocPrint(arena,
-            \\ String: {[string]s}
-            \\ Validity: {[validity]s}
-            \\ Byte Length: {[byte_length]d}
-            \\ UTF8 Codepoint Count: {[length]d}
-        , .{
-            .string = if (is_utf8) string else display_str,
-            .validity = validity,
-            .byte_length = byte_length,
-            .length = length,
-        }),
+        .markdown => {
+            const str_view = if (is_utf8 and !std.mem.eql(u8, string, display_str)) try std.fmt.allocPrint(arena,
+                \\| PLAIN --{[dash]s:-<[max_width]} |
+                \\{[display_string]s}
+                \\| DECODED {[dash]s:-<[max_width]} |
+                \\{[string]s}
+                \\| --------{[dash]s:-<[max_width]} |
+            , .{
+                .max_width = max_width - 8,
+                .dash = "-",
+                .string = string,
+                .display_string = display_str,
+            }) else try std.fmt.allocPrint(arena,
+                \\| {[dash]s:-<[max_width]} |
+                \\{[string]s}
+                \\| {[dash]s:-<[max_width]} |
+            , .{
+                .max_width = max_width,
+                .dash = "-",
+                .string = if (is_utf8) string else display_str,
+            });
+            return try std.fmt.allocPrint(arena,
+                \\{[string]s}
+                \\| {[validity_header]s: <20} | {[validity]s: <[pad_len]} |
+                \\| {[byte_length_header]s: <20} | {[byte_length]d: <[pad_len]} |
+                \\| {[utf8_codepoint_header]s: <20} | {[length]d: <[pad_len]} |
+            , .{
+                .validity_header = "Validity",
+                .byte_length_header = "Byte Length",
+                .utf8_codepoint_header = "UTF8 Codepoint Count",
+                .string = str_view,
+                .validity = validity,
+                .pad_len = validity.len,
+                .byte_length = byte_length,
+                .length = length,
+            });
+        },
+        .plaintext, .unknown_value => {
+            const str_view = if (is_utf8 and !std.mem.eql(u8, string, display_str)) try std.fmt.allocPrint(arena,
+                \\ Plain String: {[string]s}
+                \\ Decoded String: {[display_string]s}
+            , .{
+                .string = string,
+                .display_string = display_str,
+            }) else try std.fmt.allocPrint(arena,
+                \\ String: {[string]s}
+            , .{
+                .string = if (is_utf8) string else display_str,
+            });
+            return try std.fmt.allocPrint(arena,
+                \\{[string]s}
+                \\ Validity: {[validity]s}
+                \\ Byte Length: {[byte_length]d}
+                \\ UTF8 Codepoint Count: {[length]d}
+            , .{
+                .string = str_view,
+                .validity = validity,
+                .byte_length = byte_length,
+                .length = length,
+            });
+        },
     }
 }
 

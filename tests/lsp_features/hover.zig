@@ -277,7 +277,10 @@ test "string literal" {
         \\\\fo<cursor>o
         \\\\euro \xE2\x82\xAC
     ,
-        \\| ---------- |
+        \\| PLAIN ---- |
+        \\\\foo
+        \\\\euro \xE2\x82\xAC
+        \\| DECODED -- |
         \\\\foo
         \\\\euro €
         \\| ---------- |
