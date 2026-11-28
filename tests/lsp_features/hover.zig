@@ -240,7 +240,7 @@ test "string literal" {
         \\| ---------- |
         \\| Validity             | Invalid UTF8 |
         \\| Byte Length          | 4            |
-        \\| UTF8 Codepoint Count | 0            |
+        \\| UTF8 Codepoint Count | 10           |
     );
     try testHover("const foo = \"foo<cursor> bar\"",
         \\| --------- |
@@ -280,14 +280,25 @@ test "string literal" {
         \\| PLAIN ---- |
         \\\\foo
         \\\\euro \xE2\x82\xAC
+        \\| Byte Length          | 25         |
+        \\| UTF8 Codepoint Count | 25         |
         \\| DECODED -- |
         \\\\foo
         \\\\euro €
-        \\| ---------- |
-        \\| Validity             | Valid UTF8 |
         \\| Byte Length          | 16         |
         \\| UTF8 Codepoint Count | 14         |
+        \\| ---------- |
+        \\| Validity             | Valid UTF8 |
     );
+    try testHoverWithOptions(
+        \\const foo =
+        \\\\euro <cursor>\xE2\x82\xAC
+    ,
+        \\ String: \\euro €
+        \\ Validity: Valid UTF8
+        \\ Byte Length: 10
+        \\ UTF8 Codepoint Count: 8
+    , .{ .markup_kind = .plaintext });
 }
 test "builtin" {
     try testHover(
@@ -1538,7 +1549,6 @@ fn testHoverWithOptions(
         server.offset_encoding,
     ) orelse {
         if (expected.len == 0) return;
-        std.debug.print("Server returned `null` as the result\n", .{});
         return error.InvalidResponse;
     };
 

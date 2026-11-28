@@ -450,19 +450,19 @@ fn hoverStringLiteral(
     const tag = tree.tokenTag(token_index);
     var max_width: usize = 0;
     // display this if not valid utf8
-    var display_str: []const u8 = undefined;
+    var plaintext_str: []const u8 = undefined;
 
     const string = blk: switch (tag) {
         .string_literal,
         => {
             const string = ast.utf8Slice(tree.*, arena, token_index) catch {
                 const string = tree.tokenSlice(token_index);
-                display_str = string;
+                plaintext_str = string;
                 max_width = string.len;
                 break :blk string;
             };
-            display_str = tree.tokenSlice(token_index);
-            max_width = if (std.unicode.utf8ValidateSlice(string)) string.len else display_str.len;
+            plaintext_str = tree.tokenSlice(token_index);
+            max_width = if (std.unicode.utf8ValidateSlice(string)) string.len else plaintext_str.len;
             break :blk string;
         },
         .multiline_string_literal_line => {
@@ -482,7 +482,7 @@ fn hoverStringLiteral(
                 const string = tree.tokenSlice(start);
                 break :blkutf8 string;
             };
-            display_str = if (std.unicode.utf8ValidateSlice(string_utf8)) string_utf8 else tree.tokenSlice(start);
+            plaintext_str = tree.tokenSlice(start);
             var acc_string: []const u8 = string_utf8;
             max_width = acc_string.len;
             blk1: while (true) {
@@ -492,18 +492,18 @@ fn hoverStringLiteral(
                         const cur_str = ast.utf8Slice(tree.*, arena, start) catch {
                             const in_str = tree.tokenSlice(start);
                             const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, in_str });
-                            const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, in_str });
+                            const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ plaintext_str, in_str });
                             max_width = @max(in_str.len, max_width);
                             acc_string = current;
-                            display_str = cur_display;
+                            plaintext_str = cur_display;
                             continue;
                         };
                         const current = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ acc_string, cur_str });
                         const token_slice = tree.tokenSlice(start);
-                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ display_str, token_slice });
+                        const cur_display = try std.fmt.allocPrint(arena, "{s}\n{s}", .{ plaintext_str, token_slice });
                         max_width = @max(cur_str.len, max_width);
                         acc_string = current;
-                        display_str = cur_display;
+                        plaintext_str = cur_display;
                     },
                     else => {
                         break :blk1;
@@ -523,42 +523,53 @@ fn hoverStringLiteral(
         },
     };
     const byte_length = string.len;
+    const plaintext_byte_length = plaintext_str.len;
     const is_utf8 = std.unicode.utf8ValidateSlice(string);
     const validity = if (is_utf8) "Valid UTF8" else "Invalid UTF8";
-    const length = std.unicode.utf8CountCodepoints(string) catch 0;
+    const plaintext_length = std.unicode.utf8CountCodepoints(plaintext_str) catch 0;
+    const length = std.unicode.utf8CountCodepoints(string) catch plaintext_length;
 
     switch (markup_kind) {
         .markdown => {
-            const str_view = if (is_utf8 and !std.mem.eql(u8, string, display_str)) try std.fmt.allocPrint(arena,
+            return if (is_utf8 and !std.mem.eql(u8, string, plaintext_str)) try std.fmt.allocPrint(arena,
                 \\| PLAIN --{[dash]s:-<[max_width]} |
                 \\{[display_string]s}
+                \\| {[byte_length_header]s: <20} | {[plain_byte_length]d: <[pad_len]} |
+                \\| {[utf8_codepoint_header]s: <20} | {[plain_length]d: <[pad_len]} |
                 \\| DECODED {[dash]s:-<[max_width]} |
                 \\{[string]s}
+                \\| {[byte_length_header]s: <20} | {[byte_length]d: <[pad_len]} |
+                \\| {[utf8_codepoint_header]s: <20} | {[length]d: <[pad_len]} |
                 \\| --------{[dash]s:-<[max_width]} |
+                \\| {[validity_header]s: <20} | {[validity]s: <[pad_len]} |
             , .{
                 .max_width = max_width - 8,
-                .dash = "-",
                 .string = string,
-                .display_string = display_str,
+                .display_string = plaintext_str,
+                .dash = "-",
+                .validity_header = "Validity",
+                .byte_length_header = "Byte Length",
+                .utf8_codepoint_header = "UTF8 Codepoint Count",
+                .validity = validity,
+                .pad_len = validity.len,
+                .plain_byte_length = plaintext_byte_length,
+                .plain_length = plaintext_length,
+                .byte_length = byte_length,
+                .length = length,
             }) else try std.fmt.allocPrint(arena,
                 \\| {[dash]s:-<[max_width]} |
                 \\{[string]s}
                 \\| {[dash]s:-<[max_width]} |
-            , .{
-                .max_width = max_width,
-                .dash = "-",
-                .string = if (is_utf8) string else display_str,
-            });
-            return try std.fmt.allocPrint(arena,
-                \\{[string]s}
                 \\| {[validity_header]s: <20} | {[validity]s: <[pad_len]} |
                 \\| {[byte_length_header]s: <20} | {[byte_length]d: <[pad_len]} |
                 \\| {[utf8_codepoint_header]s: <20} | {[length]d: <[pad_len]} |
             , .{
+                .max_width = max_width,
+                .dash = "-",
+                .string = if (is_utf8) string else plaintext_str,
                 .validity_header = "Validity",
                 .byte_length_header = "Byte Length",
                 .utf8_codepoint_header = "UTF8 Codepoint Count",
-                .string = str_view,
                 .validity = validity,
                 .pad_len = validity.len,
                 .byte_length = byte_length,
@@ -566,24 +577,13 @@ fn hoverStringLiteral(
             });
         },
         .plaintext, .unknown_value => {
-            const str_view = if (is_utf8 and !std.mem.eql(u8, string, display_str)) try std.fmt.allocPrint(arena,
-                \\ Plain String: {[string]s}
-                \\ Decoded String: {[display_string]s}
-            , .{
-                .string = string,
-                .display_string = display_str,
-            }) else try std.fmt.allocPrint(arena,
-                \\ String: {[string]s}
-            , .{
-                .string = if (is_utf8) string else display_str,
-            });
             return try std.fmt.allocPrint(arena,
-                \\{[string]s}
+                \\ String: {[string]s}
                 \\ Validity: {[validity]s}
                 \\ Byte Length: {[byte_length]d}
                 \\ UTF8 Codepoint Count: {[length]d}
             , .{
-                .string = str_view,
+                .string = string,
                 .validity = validity,
                 .byte_length = byte_length,
                 .length = length,
